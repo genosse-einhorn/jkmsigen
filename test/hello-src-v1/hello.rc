@@ -1,0 +1,26 @@
+#include <windows.h>
+
+42 ICON "hello.ico"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     1,0,0,0
+PRODUCTVERSION  1,0,0,0
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904E4"
+        BEGIN
+            VALUE "CompanyName",      "Genosse Einhorn"
+            VALUE "FileDescription",  "Hello World Application"
+            VALUE "FileVersion",      "v1.0"
+            VALUE "InternalName",     "hello.exe"
+            VALUE "OriginalFilename", "hello.exe"
+            VALUE "ProductName",      "Hello World"
+            VALUE "ProductVersion",   "v1.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1252
+    END
+END

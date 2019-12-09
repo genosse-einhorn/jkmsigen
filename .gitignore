@@ -1,0 +1,5 @@
+jkmsigen.exe
+*.zip
+__pycache__
+
+*.msi
