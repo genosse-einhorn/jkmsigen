@@ -150,7 +150,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
             name, extension = os.path.splitext(args.shortcut)
 
             # windows installer WTF: shortcut icon id must have same extension as shortcut target
-            iconid = 'Icon_' + shortcutel.attrib['Id'].split('_')[0] + extension.upper()
+            iconid = 'Icon_' + shortcutel.attrib['Id'].split('_')[1] + extension.upper()
             shortcutel.attrib['Icon'] = iconid
         else:
             iconid = 'app.ico'
