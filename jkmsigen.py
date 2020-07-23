@@ -45,12 +45,22 @@ ap.add_argument('--icon', metavar='PATH/TO/FILE.ICO')
 ap.add_argument('--with-ui', metavar='CULTURE')
 ap.add_argument('--x64', action='store_true')
 ap.add_argument('-d', '--variable', metavar='NAME=VALUE', action='append', default=[])
+ap.add_argument('--assoc-extension', metavar='ext', action='append', default=[])
+ap.add_argument('--assoc-icon-index', type=int, metavar='N')
+ap.add_argument('--assoc-target', metavar='RELATIVE/PATH/TO/HANDLER.EXE')
+ap.add_argument('--assoc-description', metavar='DESCRIPTION')
 ap.add_argument('sourcedirectory')
 
 args = ap.parse_args()
 
 if args.manufacturer is None:
     args.manufacturer = args.name
+
+if args.assoc_extension is not None and args.assoc_target is None:
+    if args.shortcut is None:
+        logging.error('No association target and no shortcut specified. Ignoring file associations.')
+    else:
+        args.assoc_target = args.shortcut
 
 if args.upgrade_code is None:
     logging.warning('no UpgradeCode specified, generating one for you')
@@ -74,7 +84,7 @@ if args.x64:
 else:
     progfilesdir = ET.SubElement(targetdir, 'Directory', Id='ProgramFilesFolder', Name='ProgramFiles')
 installdir = ET.SubElement(progfilesdir, 'Directory', Id='INSTALLDIR', Name=args.name)
-installdirpath = progfilesdir.attrib['Id'] + '/' + installdir.attrib['Name'] # for generating stable component ids
+installdirpath = progfilesdir.attrib['Id'] + '/' + installdir.attrib['Name'].upper() # for generating stable component ids
 
 feature = ET.SubElement(product, 'Feature', Id='Complete', Level='1')
 
@@ -98,6 +108,17 @@ for v in args.variable:
     name, val = (v.split('=', 1) + [''])[0:2]
     ET.SubElement(product, 'WixVariable', Id=name, Value=val)
 
+# registry component helper
+def addregcomp(*, Root='HKLM', Key, Name='', Value, Type='string'):
+    i = uuid5(args.upgrade_code, '{}\\{}\\{}'.format(Root, Key, Name))
+
+    c = ET.SubElement(targetdir, 'Component', Id='Comp_'+i.hex, Guid=str(i))
+    r = ET.SubElement(c, 'RegistryValue', Root=Root, Key=Key, Name=Name, Value=Value, Type=Type, KeyPath='yes')
+
+    if len(Name) == 0:
+        del r.attrib['Name']
+
+    ET.SubElement(feature, 'ComponentRef', Id=c.attrib['Id'])
 
 # add files
 def walkdir(direl, sourcepath, dirpath):
@@ -158,6 +179,52 @@ with tempfile.TemporaryDirectory() as tmpdir:
         ET.SubElement(product, 'Icon', Id=iconid, SourceFile=os.path.join(tmpdir, 'appico.dll'))
         ET.SubElement(product, 'Property', Id='ARPPRODUCTICON', Value=iconid)
 
+    # file associations
+    if len(args.assoc_extension) > 0 and args.assoc_target is not None:
+        assoc_target_fileid = 'File_' + uuid5(args.upgrade_code, installdirpath + '/' + args.assoc_target.upper()).hex
+
+        addregcomp(Key='Software\\RegisteredApplications',
+                    Name='{}'.format(args.upgrade_code),
+                    Value='Software\\Classes\\Applications\\{}.exe\\Capabilities'.format(args.upgrade_code))
+
+        addregcomp(Key='Software\\Classes\\Applications\\{}.exe\\Capabilities'.format(args.upgrade_code),
+                    Name='ApplicationDescription',
+                    Value=args.name)
+
+        addregcomp(Key='Software\\Classes\\Applications\\{}.exe\\shell\\open\\command'.format(args.upgrade_code),
+                    Value='"[#{}]" "%1"'.format(assoc_target_fileid))
+
+        for ext in args.assoc_extension:
+            progid = '{}.Assoc.{}'.format(args.upgrade_code, ext)
+
+            addregcomp(Key='Software\\Classes\\{}\\DefaultIcon'.format(progid),
+                        Value='"[#{}]",{}'.format(assoc_target_fileid, args.assoc_icon_index))
+
+            if args.assoc_description is not None:
+                addregcomp(Key='Software\\Classes\\{}'.format(progid),
+                           Value=args.assoc_description)
+
+            addregcomp(Key='Software\\Classes\\{}\\shell\\open\\command'.format(progid),
+                        Value='"[#{}]" "%1"'.format(assoc_target_fileid))
+
+            addregcomp(Key='Software\\Classes\\Applications\\{}.exe\\Capabilities\\FileAssociations'.format(args.upgrade_code),
+                        Name='.{}'.format(ext),
+                        Value=progid)
+
+            addregcomp(Key='Software\\Classes\\.{}\\OpenWithProgIds'.format(ext),
+                        Name=progid, Value='')
+
+        if args.x64:
+            shchangenotify_dll = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'custom-actions', 'shchangenotify', 'shchangenotify64.dll')
+        else:
+            shchangenotify_dll = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'custom-actions', 'shchangenotify', 'shchangenotify32.dll')
+
+        binel = ET.SubElement(product, 'Binary', Id='Binary_ShChangeNotifyDll', SourceFile=shchangenotify_dll)
+        cael = ET.SubElement(product, 'CustomAction', Id='CA_ShChangeNotify', BinaryKey=binel.attrib['Id'], DllEntry='CallSHChangeNotifyAssocChanged', Return='ignore')
+
+        iesel = ET.SubElement(product, 'InstallExecuteSequence')
+        ET.SubElement(iesel, 'Custom', Action=cael.attrib['Id'], After='InstallFinalize')
+
     # write wxs and build msi
     with open(os.path.join(tmpdir, 'app.wxs'), 'wb') as f:
         f.write(b'<?xml version="1.0" encoding="utf-8" ?>')
@@ -187,7 +254,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
         subprocess.run([lightexe] + lightargs + ['-out', os.path.join(tmpdir, 'app.msi'), os.path.join(tmpdir, 'app.wixobj')], check=True)
 
         try:
-            subprocess.run([smokeexe, '-nologo', '-sice:ICE61', '-sice:ICE40', os.path.join(tmpdir, 'app.msi')], check=True)
+            subprocess.run([smokeexe, '-nologo', '-sice:ICE61', '-sice:ICE40', '-sice:ICE69', os.path.join(tmpdir, 'app.msi')], check=True)
         except subprocess.CalledProcessError as e:
             logging.warning('MSI validation failed')
             logging.warning(e)

@@ -1,0 +1,11 @@
+all: shchangenotify32.dll shchangenotify64.dll
+
+
+shchangenotify32.dll: main.c
+	i686-w64-mingw32-gcc -o $@ $< -lshell32 -shared -s -nostdlib -nodefaultlibs -Wl,--subsystem,windows -Wl,--kill-at
+
+shchangenotify64.dll: main.c
+	x86_64-w64-mingw32-gcc -o $@ $< -lshell32 -shared -s -nostdlib -nodefaultlibs -Wl,--subsystem,windows -Wl,--kill-at
+
+clean:
+	rm -f shchangenotify32.dll shchangenotify64.dll
