@@ -84,9 +84,14 @@ if args.x64:
 else:
     progfilesdir = ET.SubElement(targetdir, 'Directory', Id='ProgramFilesFolder', Name='ProgramFiles')
 installdir = ET.SubElement(progfilesdir, 'Directory', Id='INSTALLDIR', Name=args.name)
-installdirpath = progfilesdir.attrib['Id'] + '/' + installdir.attrib['Name'].upper() # for generating stable component ids
 
 feature = ET.SubElement(product, 'Feature', Id='Complete', Level='1')
+
+idcounter = 0
+def makeid(prefix):
+    global idcounter
+    idcounter = idcounter + 1
+    return '{}_{}'.format(prefix, idcounter)
 
 # reinstallmode 'a' is usually dangerous, but we
 # - have no shared components,
@@ -94,8 +99,6 @@ feature = ET.SubElement(product, 'Feature', Id='Complete', Level='1')
 # - and follow the component rules closely enough
 # so it shouldn't be a problem here
 ET.SubElement(product, 'Property', Id='REINSTALLMODE', Value='amus')
-
-shortcutel = None
 
 if args.with_ui is not None:
     ET.SubElement(product, 'Property', Id="WIXUI_INSTALLDIR", Value="INSTALLDIR")
@@ -110,52 +113,66 @@ for v in args.variable:
 
 # registry component helper
 def addregcomp(*, Root='HKLM', Key, Name='', Value, Type='string'):
-    i = uuid5(args.upgrade_code, '{}\\{}\\{}'.format(Root, Key, Name))
-
-    c = ET.SubElement(targetdir, 'Component', Id='Comp_'+i.hex, Guid=str(i))
+    c = ET.SubElement(targetdir, 'Component', Guid='*', Feature=feature.attrib['Id'])
     r = ET.SubElement(c, 'RegistryValue', Root=Root, Key=Key, Name=Name, Value=Value, Type=Type, KeyPath='yes')
 
     if len(Name) == 0:
         del r.attrib['Name']
 
-    ET.SubElement(feature, 'ComponentRef', Id=c.attrib['Id'])
+    return c
 
-# add files
-def walkdir(direl, sourcepath, dirpath):
+# recursive file component helper
+def walkdir(direl, sourcepath):
     for e in os.scandir(sourcepath):
-        idpath = '{}/{}'.format(dirpath, e.name.upper())
-        iduuid = uuid5(args.upgrade_code, idpath)
         if e.is_dir():
-            d = ET.SubElement(direl, 'Directory', Name=e.name, Id='Dir_'+iduuid.hex)
-            walkdir(d, e.path, idpath)
+            d = ET.SubElement(direl, 'Directory', Name=e.name, Id=makeid('Directory'))
+            walkdir(d, e.path)
         else:
-            comp = ET.SubElement(direl, 'Component', Id='Comp_'+iduuid.hex, Guid=str(iduuid))
-            f = ET.SubElement(comp, 'File', Name=e.name, DiskId='1', Source=e.path, KeyPath='yes', Id='File_'+iduuid.hex)
-            ET.SubElement(feature, 'ComponentRef', Id='Comp_'+iduuid.hex)
+            comp = ET.SubElement(direl, 'Component', Guid='*', Feature=feature.attrib['Id'])
+            f = ET.SubElement(comp, 'File', Name=e.name, DiskId='1', Source=e.path, KeyPath='yes', Id=makeid('File'))
 
-            if args.shortcut is not None and installdirpath + '/' + args.shortcut.upper() == idpath:
-                # shortcut
-                global shortcutel
-                shortcutel = ET.SubElement(f, 'Shortcut', Id='Shortcut_'+iduuid.hex, Directory='ProgramMenuFolder', Advertise='yes', Name=args.name)
+def findfileelforpath(direl, path):
+    path = path.replace('\\', '/')
 
-                # need to reference start menu folder, otherwise advertised installation might fail
-                ET.SubElement(targetdir, 'Directory', Id='ProgramMenuFolder', Name='All Programs')
+    i = path.find('/')
+    if i < 0:
+        # last part, search file component
+        for subel in direl:
+            if subel.tag == 'Component':
+                for subsubel in subel:
+                    if subsubel.tag == 'File' and subsubel.attrib['Name'].upper() == path.upper():
+                        return subsubel
+    else:
+        # directory part
+        for subel in direl:
+            if subel.tag != 'Directory':
+                continue
 
-def addfiles(sourcedir):
-    walkdir(installdir, sourcedir, installdirpath)
+            if subel.attrib['Name'].upper() == path[0:i].upper():
+                return findfileelforpath(subel, path[i+1:])
 
+    return None
 
 with tempfile.TemporaryDirectory() as tmpdir:
     if os.path.isdir(args.sourcedirectory):
-        addfiles(args.sourcedirectory)
+        walkdir(installdir, args.sourcedirectory)
     else:
         with ZipFile(args.sourcedirectory, 'r') as z:
             s = os.path.join(tmpdir, 'src')
             z.extractall(s)
-            addfiles(s)
+            walkdir(installdir, s)
 
-    if args.shortcut is not None and shortcutel is None:
-        logging.error('couldn’t create shortcut {}: file not found'.format(args.shortcut))
+    shortcutel = None
+    if args.shortcut is not None:
+        f = findfileelforpath(installdir, args.shortcut)
+
+        if f is None:
+            logging.error('couldn’t create shortcut {}: file not found'.format(args.shortcut))
+        else:
+            shortcutel = ET.SubElement(f, 'Shortcut', Id='AppShortcut', Directory='ProgramMenuFolder', Advertise='yes', Name=args.name)
+
+            # need to reference start menu folder, otherwise advertised installation might fail
+            ET.SubElement(targetdir, 'Directory', Id='ProgramMenuFolder', Name='All Programs')
 
     if args.icon is not None:
         # Windows Installer WTF: icons for shortcuts (and file associations) need to reside in EXE or DLL files
@@ -171,7 +188,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
             name, extension = os.path.splitext(args.shortcut)
 
             # windows installer WTF: shortcut icon id must have same extension as shortcut target
-            iconid = 'Icon_' + shortcutel.attrib['Id'].split('_')[1] + extension.upper()
+            iconid = 'AppIcon' + extension.upper()
             shortcutel.attrib['Icon'] = iconid
         else:
             iconid = 'app.ico'
@@ -181,7 +198,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
     # file associations
     if len(args.assoc_extension) > 0 and args.assoc_target is not None:
-        assoc_target_fileid = 'File_' + uuid5(args.upgrade_code, installdirpath + '/' + args.assoc_target.upper()).hex
+        targetpath = '"[INSTALLDIR]{}"'.format(args.assoc_target.replace('/', '\\'))
 
         addregcomp(Key='Software\\RegisteredApplications',
                     Name='{}'.format(args.upgrade_code),
@@ -192,20 +209,20 @@ with tempfile.TemporaryDirectory() as tmpdir:
                     Value=args.name)
 
         addregcomp(Key='Software\\Classes\\Applications\\{}.exe\\shell\\open\\command'.format(args.upgrade_code),
-                    Value='"[#{}]" "%1"'.format(assoc_target_fileid))
+                    Value='{} "%1"'.format(targetpath))
 
         for ext in args.assoc_extension:
             progid = '{}.Assoc.{}'.format(args.upgrade_code, ext)
 
             addregcomp(Key='Software\\Classes\\{}\\DefaultIcon'.format(progid),
-                        Value='"[#{}]",{}'.format(assoc_target_fileid, args.assoc_icon_index))
+                        Value='{},{}'.format(targetpath, args.assoc_icon_index))
 
             if args.assoc_description is not None:
                 addregcomp(Key='Software\\Classes\\{}'.format(progid),
                            Value=args.assoc_description)
 
             addregcomp(Key='Software\\Classes\\{}\\shell\\open\\command'.format(progid),
-                        Value='"[#{}]" "%1"'.format(assoc_target_fileid))
+                        Value='{} "%1"'.format(targetpath))
 
             addregcomp(Key='Software\\Classes\\Applications\\{}.exe\\Capabilities\\FileAssociations'.format(args.upgrade_code),
                         Name='.{}'.format(ext),
@@ -254,7 +271,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
         subprocess.run([lightexe] + lightargs + ['-out', os.path.join(tmpdir, 'app.msi'), os.path.join(tmpdir, 'app.wixobj')], check=True)
 
         try:
-            subprocess.run([smokeexe, '-nologo', '-sice:ICE61', '-sice:ICE40', '-sice:ICE69', os.path.join(tmpdir, 'app.msi')], check=True)
+            subprocess.run([smokeexe, '-nologo', '-sice:ICE61', '-sice:ICE40', os.path.join(tmpdir, 'app.msi')], check=True)
         except subprocess.CalledProcessError as e:
             logging.warning('MSI validation failed')
             logging.warning(e)
