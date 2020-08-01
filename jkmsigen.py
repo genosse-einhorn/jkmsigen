@@ -76,7 +76,7 @@ wix = ET.Element('Wix', xmlns='http://schemas.microsoft.com/wix/2006/wi')
 product = ET.SubElement(wix, 'Product', Name=args.name, Id='*', UpgradeCode=str(args.upgrade_code), Codepage=str(args.codepage), Manufacturer=args.manufacturer, Version=args.version, Language=str(args.language))
 package = ET.SubElement(product, 'Package', Id='*', InstallerVersion='200', Compressed='yes', Languages=str(args.language), SummaryCodepage=str(args.codepage), Description=args.name, Manufacturer=args.manufacturer, InstallScope='perMachine')
 media = ET.SubElement(product, 'Media', Id='1', Cabinet='Media1.cab', EmbedCab='yes')
-ET.SubElement(product, 'MajorUpgrade', AllowDowngrades='yes', Schedule='afterInstallExecute')
+ET.SubElement(product, 'MajorUpgrade', AllowDowngrades='yes', Schedule='afterInstallValidate')
 
 targetdir = ET.SubElement(product, 'Directory', Id='TARGETDIR', Name='SourceDir')
 if args.x64:
