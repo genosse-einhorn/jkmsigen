@@ -39,6 +39,8 @@ ap.add_argument('--version')
 ap.add_argument('--name', metavar='My Application', required=True)
 ap.add_argument('--manufacturer')
 ap.add_argument('--shortcut', metavar='RELATIVE/PATH/TO/APP.EXE')
+ap.add_argument('--shortcut-name-mui-id', type=int)
+ap.add_argument('--shortcut-name-mui-dll', metavar='RELATIVE/PATH/TO/FILE.DLL')
 ap.add_argument('--codepage', metavar='????', type=int, default=1252)
 ap.add_argument('--language', metavar='????', type=int, default=0)
 ap.add_argument('--icon', metavar='PATH/TO/FILE.ICO')
@@ -170,6 +172,13 @@ with tempfile.TemporaryDirectory() as tmpdir:
             logging.error('couldn’t create shortcut {}: file not found'.format(args.shortcut))
         else:
             shortcutel = ET.SubElement(f, 'Shortcut', Id='AppShortcut', Directory='ProgramMenuFolder', Advertise='yes', Name=args.name)
+
+            if args.shortcut_name_mui_id is not None:
+                if args.shortcut_name_mui_dll is None:
+                    args.shortcut_name_mui_dll = args.shortcut
+
+                shortcutel.attrib['DisplayResourceDll'] = '[INSTALLDIR]{}'.format(args.shortcut_name_mui_dll.replace('/', '\\'))
+                shortcutel.attrib['DisplayResourceId'] = str(args.shortcut_name_mui_id)
 
             # need to reference start menu folder, otherwise advertised installation might fail
             ET.SubElement(targetdir, 'Directory', Id='ProgramMenuFolder', Name='All Programs')
