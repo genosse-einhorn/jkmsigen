@@ -90,11 +90,16 @@ given codepage only.
 
 Set the language of the installer. The default is 0 (i.e. language neutral).
 
+#### --installdir
+
+Name of the subdirectory in `C:\Program Files`. Defaults to the application name.
+
 #### source\directory
 
 Path to the installed files. Can also be a ZIP file.
 
-The files and directories contained there will be installed under `C:\Program Files\<App Name>`.
+The files and directories contained there will be installed under `C:\Program Files\<installdir>`,
+where `<installdir>` defaults to the application name but can be changed with the `--installdir` parameter.
 
 ## Limitations
 
