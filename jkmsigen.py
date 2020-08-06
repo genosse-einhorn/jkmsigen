@@ -287,7 +287,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
     subprocess.run([candleexe, '-nologo', '-arch', arch, '-out', os.path.join(tmpdir, 'app.wixobj'), os.path.join(tmpdir, 'app.wxs')], check=True)
 
-    lightargs = ['-nologo', '-sval']
+    lightargs = ['-nologo', '-sval', '-sw1106']
     if args.with_ui is not None:
         lightargs += [ '-ext', 'WixUIExtension', '-cultures:' + args.with_ui ]
 
