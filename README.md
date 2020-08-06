@@ -63,6 +63,12 @@ not backslashes (`\`).
 The shortcut target is required to be an `EXE` file. It is also recommended to specify
 the `--icon` argument because otherwise the shortcut might not have an icon.
 
+#### --shortcut-name-mui-dll
+#### --shortcut-name-mui-id
+
+Allows you to specify a string resource to use as shortcut name. Windows will
+then load the localized resource to display the shortcut.
+
 #### --icon=
 
 Path to a `.ico` file. The icon is used as shortcut icon and displayed in the `Add/Remove Programs` control panel
