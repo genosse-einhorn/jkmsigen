@@ -275,33 +275,30 @@ with tempfile.TemporaryDirectory() as tmpdir:
     if args.output_wxs is not None:
         shutil.copyfile(os.path.join(tmpdir, 'app.wxs'), args.output_wxs)
 
-    if os.name == 'nt':
-        wixdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '3rdparty', 'wix')
-        candleexe = os.path.join(wixdir, 'candle.exe')
-        lightexe = os.path.join(wixdir, 'light.exe')
-        smokeexe = os.path.join(wixdir, 'smoke.exe')
+    wixdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '3rdparty', 'wix')
+    candleexe = os.path.join(wixdir, 'candle.exe')
+    lightexe = os.path.join(wixdir, 'light.exe')
+    smokeexe = os.path.join(wixdir, 'smoke.exe')
 
-        if args.x64:
-            arch = 'x64'
-        else:
-            arch = 'x86'
-
-        subprocess.run([candleexe, '-nologo', '-arch', arch, '-out', os.path.join(tmpdir, 'app.wixobj'), os.path.join(tmpdir, 'app.wxs')], check=True)
-
-        lightargs = ['-nologo', '-sval']
-        if args.with_ui is not None:
-            lightargs += [ '-ext', 'WixUIExtension', '-cultures:' + args.with_ui ]
-
-
-        subprocess.run([lightexe] + lightargs + ['-out', os.path.join(tmpdir, 'app.msi'), os.path.join(tmpdir, 'app.wixobj')], check=True)
-
-        try:
-            subprocess.run([smokeexe, '-nologo', '-sice:ICE61', '-sice:ICE40', os.path.join(tmpdir, 'app.msi')], check=True)
-        except subprocess.CalledProcessError as e:
-            logging.warning('MSI validation failed')
-            logging.warning(e)
+    if args.x64:
+        arch = 'x64'
     else:
-        subprocess.run(['wixl', os.path.join(tmpdir, 'app.wxs')], check=True)
+        arch = 'x86'
+
+    subprocess.run([candleexe, '-nologo', '-arch', arch, '-out', os.path.join(tmpdir, 'app.wixobj'), os.path.join(tmpdir, 'app.wxs')], check=True)
+
+    lightargs = ['-nologo', '-sval']
+    if args.with_ui is not None:
+        lightargs += [ '-ext', 'WixUIExtension', '-cultures:' + args.with_ui ]
+
+
+    subprocess.run([lightexe] + lightargs + ['-out', os.path.join(tmpdir, 'app.msi'), os.path.join(tmpdir, 'app.wixobj')], check=True)
+
+    try:
+        subprocess.run([smokeexe, '-nologo', '-sice:ICE61', '-sice:ICE40', os.path.join(tmpdir, 'app.msi')], check=True)
+    except subprocess.CalledProcessError as e:
+        logging.warning('MSI validation failed')
+        logging.warning(e)
 
     shutil.copyfile(os.path.join(tmpdir, 'app.msi'), args.output_msi)
 
