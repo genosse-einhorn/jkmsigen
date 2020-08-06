@@ -84,6 +84,22 @@ Use `-dWixUILicenseRtf="path\to\license.rtf"` to choose the license displayed du
 
 Build a 64bit installer.
 
+#### --assoc-extension
+#### --assoc-icon-index
+#### --assoc-target
+#### --assoc-description
+
+EXPERIMENTAL support for file associations. You can specify one or more file types to associate
+using `--assoc-extension=myext`, set the program to launch using `--assoc-target` (default: the
+shortcut target) and the file type description using `--assoc-description`. The `-assoc-icon-index`
+parameters specifies the icon to use for the file type, the icon is always loaded from the program
+specified in `--assoc-target`.
+
+Check out the example in `test/build-notepad2.bat`.
+
+The file association code is EXPERIMENTAL, it may change in a non backwards-compatible way
+or may be removed at any time.
+
 #### --codepage
 
 Set the codepage used for the installer. Windows installer `.msi` files cannot reliably use Unicode, they
@@ -111,7 +127,7 @@ where `<installdir>` defaults to the application name but can be changed with th
 
 #### Installer features not supported by jkmsigen
 
-* Registering file extensions
+* ~~Registering file extensions~~ EXPERIMENTAL support for file associations is available.
 * Registering COM components
 * Adding registry entries
 * Installing files outside of `C:\Program Files`
