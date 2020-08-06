@@ -119,19 +119,13 @@ have to use one of the ancient ANSI codepages.
 The application name, the manufacturer name and all filenames have to consist of characters in the
 given codepage only. You can change the codepage using the `--codepage` parameter.
 
-#### Building using `wixl` on linux
-
-`jkmsigen` can somewhat limp along using `wixl` on linux and possibly other unixoid systems. Installers
-generated using `wixl` do not support upgrades and also do not support WixUI. There may be other bugs, too.
-
-If you want to build on linux, you should rather try running the windows version in Wine.
-
 #### Building on linux with Wine
 
 WiX and `jkmsigen` mostly work in Wine with the following limitations:
 
 * The `jkmsigen.exe` wrapper does not work. You have to run it using `3rdparty\python3\python.exe jkmsigen.py`.
 * MSI validation will always fail.
+* You might need to install the original .NET Framework (`winetricks dotnet35sp1`).
 
 ## Related Projects
 
