@@ -39,7 +39,8 @@ def makeid(prefix):
     return '{}_{}'.format(prefix, idcounter)
 
 ap = ArgumentParser()
-ap.add_argument('--output-msi', '-o', metavar='PATH/TO/OUT.MSI', required=True)
+ap.add_argument('--output-msi', '-o', metavar='PATH/TO/OUT.MSI')
+ap.add_argument('--output-exe', metavar='PATH/TO/OUT.EXE')
 ap.add_argument('--output-wxs', metavar='PATH/TO/OUT.WXS')
 ap.add_argument('--upgrade-code', type=UUID)
 ap.add_argument('--version')
@@ -82,6 +83,12 @@ if args.version is None:
     logging.warning('no version specified, generating one for you')
     args.version = '0.0.1'
     logging.warning('    --version={}'.format(args.version))
+
+basename = 'app'
+if args.output_exe is not None:
+    basename = os.path.splitext(os.path.basename(args.output_exe))[0]
+if args.output_msi is not None:
+    basename = os.path.splitext(os.path.basename(args.output_msi))[0]
 
 wix = ET.Element('Wix', xmlns='http://schemas.microsoft.com/wix/2006/wi')
 product = ET.SubElement(wix, 'Product', Name=args.name, Id='*', UpgradeCode=str(args.upgrade_code), Codepage=str(args.codepage), Manufacturer=args.manufacturer, Version=args.version, Language=str(args.language))
@@ -292,15 +299,43 @@ with tempfile.TemporaryDirectory() as tmpdir:
         lightargs += [ '-ext', 'WixUIExtension', '-cultures:' + args.with_ui ]
 
 
-    subprocess.run([lightexe] + lightargs + ['-out', os.path.join(tmpdir, 'app.msi'), os.path.join(tmpdir, 'app.wixobj')], check=True)
+    subprocess.run([lightexe] + lightargs + ['-out', os.path.join(tmpdir, basename + '.msi'), os.path.join(tmpdir, 'app.wixobj')], check=True)
 
     try:
-        subprocess.run([smokeexe, '-nologo', '-sice:ICE61', '-sice:ICE40', os.path.join(tmpdir, 'app.msi')], check=True)
+        subprocess.run([smokeexe, '-nologo', '-sice:ICE61', '-sice:ICE40', os.path.join(tmpdir, basename + '.msi')], check=True)
     except subprocess.CalledProcessError as e:
         logging.warning('MSI validation failed')
         logging.warning(e)
 
-    shutil.copyfile(os.path.join(tmpdir, 'app.msi'), args.output_msi)
+    if args.output_msi is not None:
+        shutil.copyfile(os.path.join(tmpdir, basename+'.msi'), args.output_msi)
 
-    if args.cabfile is not None:
-        shutil.copyfile(os.path.join(tmpdir, args.cabfile), os.path.join(os.path.dirname(args.output_msi), args.cabfile))
+        if args.cabfile is not None:
+            shutil.copyfile(os.path.join(tmpdir, args.cabfile), os.path.join(os.path.dirname(args.output_msi), args.cabfile))
+
+    if args.output_exe is not None:
+        bundlewix = ET.Element('Wix', xmlns='http://schemas.microsoft.com/wix/2006/wi')
+        bundle = ET.SubElement(bundlewix, 'Bundle', Name=args.name, UpgradeCode=str(args.upgrade_code),
+                               Manufacturer=args.manufacturer, Version=args.version,
+                               DisableModify='yes')
+
+        if args.icon:
+            bundle.attrib['IconSourceFile'] = args.icon
+
+        bar = ET.SubElement(bundle, 'BootstrapperApplicationRef', Id='WixStandardBootstrapperApplication.HyperlinkLicense')
+        wsba = ET.SubElement(bar, '{http://schemas.microsoft.com/wix/BalExtension}WixStandardBootstrapperApplication',
+                             LicenseUrl='', SuppressOptionsUI='yes')
+        chain = ET.SubElement(bundle, 'Chain')
+        mp = ET.SubElement(chain, 'MsiPackage', Id='Main', SourceFile=basename+'.msi', Vital='yes', Cache='yes')
+
+        with open(os.path.join(tmpdir, 'bundle.wxs'), 'wb') as f:
+            f.write(b'<?xml version="1.0" encoding="utf-8" ?>')
+            f.write(ET.tostring(bundlewix))
+
+        subprocess.run([candleexe, '-nologo', '-arch', arch, '-ext', 'WixBalExtension',
+                        '-out', os.path.join(tmpdir, 'bundle.wixobj'), os.path.join(tmpdir, 'bundle.wxs')], check=True)
+
+        subprocess.run([lightexe, '-nologo', '-sval', '-ext', 'WixBalExtension', '-out', os.path.join(tmpdir, basename+'.exe'), os.path.join(tmpdir, 'bundle.wixobj')], check=True)
+
+        shutil.copyfile(os.path.join(tmpdir, basename+'.exe'), args.output_exe)
+
