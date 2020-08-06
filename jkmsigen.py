@@ -67,7 +67,7 @@ args = ap.parse_args()
 if args.manufacturer is None:
     args.manufacturer = args.name
 
-if args.assoc_extension is not None and args.assoc_target is None:
+if len(args.assoc_extension) > 0 and args.assoc_target is None:
     if args.shortcut is None:
         logging.error('No association target and no shortcut specified. Ignoring file associations.')
     else:
