@@ -31,6 +31,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '3rd
 
 from ico2dll import ico2dll
 
+
+idcounter = 0
+def makeid(prefix):
+    global idcounter
+    idcounter = idcounter + 1
+    return '{}_{}'.format(prefix, idcounter)
+
 ap = ArgumentParser()
 ap.add_argument('--output-msi', '-o', metavar='PATH/TO/OUT.MSI', required=True)
 ap.add_argument('--output-wxs', metavar='PATH/TO/OUT.WXS')
@@ -51,6 +58,7 @@ ap.add_argument('--assoc-extension', metavar='ext', action='append', default=[])
 ap.add_argument('--assoc-icon-index', type=int, metavar='N')
 ap.add_argument('--assoc-target', metavar='RELATIVE/PATH/TO/HANDLER.EXE')
 ap.add_argument('--assoc-description', metavar='DESCRIPTION')
+ap.add_argument('--installdir', metavar='DIRNAME')
 ap.add_argument('sourcedirectory')
 
 args = ap.parse_args()
@@ -85,15 +93,17 @@ if args.x64:
     progfilesdir = ET.SubElement(targetdir, 'Directory', Id='ProgramFiles64Folder', Name='ProgramFiles')
 else:
     progfilesdir = ET.SubElement(targetdir, 'Directory', Id='ProgramFilesFolder', Name='ProgramFiles')
-installdir = ET.SubElement(progfilesdir, 'Directory', Id='INSTALLDIR', Name=args.name)
+
+
+if args.installdir is None:
+    args.installdir = args.name
+
+installdir = progfilesdir
+for d in args.installdir.replace('/', '\\').split('\\'):
+    installdir = ET.SubElement(installdir, 'Directory', Id=makeid('Directory'), Name=d)
+installdir.attrib['Id'] = 'INSTALLDIR'
 
 feature = ET.SubElement(product, 'Feature', Id='Complete', Level='1')
-
-idcounter = 0
-def makeid(prefix):
-    global idcounter
-    idcounter = idcounter + 1
-    return '{}_{}'.format(prefix, idcounter)
 
 # reinstallmode 'a' is usually dangerous, but we
 # - have no shared components,
