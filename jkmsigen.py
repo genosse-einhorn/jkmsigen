@@ -59,6 +59,7 @@ ap.add_argument('--assoc-icon-index', type=int, metavar='N')
 ap.add_argument('--assoc-target', metavar='RELATIVE/PATH/TO/HANDLER.EXE')
 ap.add_argument('--assoc-description', metavar='DESCRIPTION')
 ap.add_argument('--installdir', metavar='DIRNAME')
+ap.add_argument('--cabfile', metavar='FILE.CAB')
 ap.add_argument('sourcedirectory')
 
 args = ap.parse_args()
@@ -85,7 +86,12 @@ if args.version is None:
 wix = ET.Element('Wix', xmlns='http://schemas.microsoft.com/wix/2006/wi')
 product = ET.SubElement(wix, 'Product', Name=args.name, Id='*', UpgradeCode=str(args.upgrade_code), Codepage=str(args.codepage), Manufacturer=args.manufacturer, Version=args.version, Language=str(args.language))
 package = ET.SubElement(product, 'Package', Id='*', InstallerVersion='200', Compressed='yes', Languages=str(args.language), SummaryCodepage=str(args.codepage), Description=args.name, Manufacturer=args.manufacturer, InstallScope='perMachine')
-media = ET.SubElement(product, 'Media', Id='1', Cabinet='Media1.cab', EmbedCab='yes')
+
+if args.cabfile is not None:
+    media = ET.SubElement(product, 'Media', Id='1', Cabinet=args.cabfile, EmbedCab='no')
+else:
+    media = ET.SubElement(product, 'Media', Id='1', Cabinet='Media1.cab', EmbedCab='yes')
+
 ET.SubElement(product, 'MajorUpgrade', AllowDowngrades='yes', Schedule='afterInstallValidate')
 
 targetdir = ET.SubElement(product, 'Directory', Id='TARGETDIR', Name='SourceDir')
@@ -298,3 +304,6 @@ with tempfile.TemporaryDirectory() as tmpdir:
         subprocess.run(['wixl', os.path.join(tmpdir, 'app.wxs')], check=True)
 
     shutil.copyfile(os.path.join(tmpdir, 'app.msi'), args.output_msi)
+
+    if args.cabfile is not None:
+        shutil.copyfile(os.path.join(tmpdir, args.cabfile), os.path.join(os.path.dirname(args.output_msi), args.cabfile))

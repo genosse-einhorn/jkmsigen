@@ -116,6 +116,10 @@ Set the language of the installer. The default is 0 (i.e. language neutral).
 
 Name of the subdirectory in `C:\Program Files`. Defaults to the application name.
 
+#### --cabfile=FILE.CAB
+
+Put data in separate .CAB file. By default, the CAB file is embedded into the MSI file.
+
 #### source\directory
 
 Path to the installed files. Can also be a ZIP file.
