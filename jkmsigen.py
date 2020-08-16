@@ -26,17 +26,14 @@ import tempfile
 import subprocess
 import shutil
 import sys
+import hashlib
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '3rdparty', 'ico2dll'))
 
 from ico2dll import ico2dll
 
-
-idcounter = 0
-def makeid(prefix):
-    global idcounter
-    idcounter = idcounter + 1
-    return '{}_{}'.format(prefix, idcounter)
+def makeid(prefix, parentid, name):
+    return prefix + hashlib.md5('{}|{}'.format(parentid, name).encode('utf-16le')).hexdigest().upper()
 
 ap = ArgumentParser()
 ap.add_argument('--output-msi', '-o', metavar='PATH/TO/OUT.MSI')
@@ -107,13 +104,12 @@ if args.x64:
 else:
     progfilesdir = ET.SubElement(targetdir, 'Directory', Id='ProgramFilesFolder', Name='ProgramFiles')
 
-
 if args.installdir is None:
     args.installdir = args.name
 
 installdir = progfilesdir
 for d in args.installdir.replace('/', '\\').split('\\'):
-    installdir = ET.SubElement(installdir, 'Directory', Id=makeid('Directory'), Name=d)
+    installdir = ET.SubElement(installdir, 'Directory', Id=makeid('dir', installdir.attrib['Id'], d), Name=d)
 installdir.attrib['Id'] = 'INSTALLDIR'
 
 feature = ET.SubElement(product, 'Feature', Id='Complete', Level='1')
@@ -150,11 +146,13 @@ def addregcomp(*, Root='HKLM', Key, Name='', Value, Type='string'):
 def walkdir(direl, sourcepath):
     for e in os.scandir(sourcepath):
         if e.is_dir():
-            d = ET.SubElement(direl, 'Directory', Name=e.name, Id=makeid('Directory'))
+            d = ET.SubElement(direl, 'Directory', Name=e.name, Id=makeid('dir', direl.attrib['Id'], e.name))
             walkdir(d, e.path)
         else:
-            comp = ET.SubElement(direl, 'Component', Guid='*', Feature=feature.attrib['Id'])
-            f = ET.SubElement(comp, 'File', Name=e.name, DiskId='1', Source=e.path, KeyPath='yes', Id=makeid('File'))
+            fileid = makeid('fil', direl.attrib['Id'], e.name)
+            compid = makeid('cmp', direl.attrib['Id'], fileid)
+            comp = ET.SubElement(direl, 'Component', Guid='*', Feature=feature.attrib['Id'], Id=compid)
+            f = ET.SubElement(comp, 'File', Name=e.name, DiskId='1', Source=e.path, KeyPath='yes', Id=fileid)
 
 def findfileelforpath(direl, path):
     path = path.replace('\\', '/')
