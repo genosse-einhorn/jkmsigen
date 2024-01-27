@@ -229,20 +229,21 @@ with tempfile.TemporaryDirectory() as tmpdir:
     # file associations
     if len(args.assoc_extension) > 0 and args.assoc_target is not None:
         targetpath = '"[INSTALLDIR]{}"'.format(args.assoc_target.replace('/', '\\'))
+        exename = args.assoc_target.rpartition('/')[2].rpartition('.')[0]
 
         addregcomp(Key='Software\\RegisteredApplications',
-                    Name='{}'.format(args.upgrade_code),
-                    Value='Software\\Classes\\Applications\\{}.exe\\Capabilities'.format(args.upgrade_code))
+                    Name='{}'.format(exename),
+                    Value='Software\\Applications\\{}.exe\\Capabilities'.format(exename))
 
-        addregcomp(Key='Software\\Classes\\Applications\\{}.exe\\Capabilities'.format(args.upgrade_code),
+        addregcomp(Key='Software\\Applications\\{}.exe\\Capabilities'.format(exename),
                     Name='ApplicationDescription',
                     Value=args.name)
 
-        addregcomp(Key='Software\\Classes\\Applications\\{}.exe\\shell\\open\\command'.format(args.upgrade_code),
+        addregcomp(Key='Software\\Classes\\Applications\\{}.exe\\shell\\open\\command'.format(exename),
                     Value='{} "%1"'.format(targetpath))
 
         for ext in args.assoc_extension:
-            progid = '{}.Assoc.{}'.format(args.upgrade_code, ext)
+            progid = '{}.{}'.format(exename, ext)
 
             addregcomp(Key='Software\\Classes\\{}\\DefaultIcon'.format(progid),
                         Value='{},{}'.format(targetpath, args.assoc_icon_index))
@@ -254,12 +255,18 @@ with tempfile.TemporaryDirectory() as tmpdir:
             addregcomp(Key='Software\\Classes\\{}\\shell\\open\\command'.format(progid),
                         Value='{} "%1"'.format(targetpath))
 
-            addregcomp(Key='Software\\Classes\\Applications\\{}.exe\\Capabilities\\FileAssociations'.format(args.upgrade_code),
+            addregcomp(Key='Software\\{}\\Capabilities\\FileAssociations'.format(args.upgrade_code),
                         Name='.{}'.format(ext),
                         Value=progid)
 
             addregcomp(Key='Software\\Classes\\.{}\\OpenWithProgIds'.format(ext),
-                        Name=progid, Value='')
+                       Name=progid, Value='')
+
+            addregcomp(Key='Software\\Classes\\.{}\\OpenWithList'.format(ext),
+                       Name='{}.exe'.format(exename), Value='')
+
+            addregcomp(Key='Software\\Classes\\Applications\\{}.exe\\SupportedTypes'.format(exename),
+                       Name='.{}'.format(ext), Value='')
 
         if args.x64:
             shchangenotify_dll = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'custom-actions', 'shchangenotify', 'shchangenotify64.dll')
@@ -267,10 +274,10 @@ with tempfile.TemporaryDirectory() as tmpdir:
             shchangenotify_dll = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'custom-actions', 'shchangenotify', 'shchangenotify32.dll')
 
         binel = ET.SubElement(product, 'Binary', Id='Binary_ShChangeNotifyDll', SourceFile=shchangenotify_dll)
-        cael = ET.SubElement(product, 'CustomAction', Id='CA_ShChangeNotify', BinaryKey=binel.attrib['Id'], DllEntry='CallSHChangeNotifyAssocChanged', Return='ignore')
+        cael = ET.SubElement(product, 'CustomAction', Id='CA_ShChangeNotify', BinaryKey=binel.attrib['Id'], DllEntry='CallSHChangeNotifyAssocChanged', Return='ignore', Execute='commit')
 
         iesel = ET.SubElement(product, 'InstallExecuteSequence')
-        ET.SubElement(iesel, 'Custom', Action=cael.attrib['Id'], After='InstallFinalize')
+        ET.SubElement(iesel, 'Custom', Action=cael.attrib['Id'], Before='InstallFinalize')
 
     # write wxs and build msi
     with open(os.path.join(tmpdir, 'app.wxs'), 'wb') as f:
